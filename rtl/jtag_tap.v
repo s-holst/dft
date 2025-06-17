@@ -1,6 +1,21 @@
-module jtag_tap (
+module jtag_tap #(
+    parameter NUM_INPUTS = 1,
+    parameter NUM_OUTPUTS = 1,
+
+    // Device ID has 32 bits and consists of {version, part, manufacturerID, 1}
+    // 11-bit manufacturerID: EIA/JEP106, [10:7] #continuation characters mod16, [6:0] last byte without parity bit
+    // older list: https://www.mikrocontroller.net/attachment/39268/jep106k.pdf
+    // latest list: https://github.com/openocd-org/openocd/blob/master/src/helper/jep106.inc
+    // manufacturerID 00001111111 is illegal. Shift this in to determine end of ID stream.
+    // Constant 1 used to determine the presence of an ID. Bypass register contains 0 after reset.
+    parameter DEVICE_ID = {4'hF, 16'hED, 11'b00001001001, 1'b1}  // Xilinx
+) (
     input TCK, TMS, TRSTn, TDI,
-    output TDO
+    output TDO,
+    input [NUM_INPUTS-1:0] inputs,
+    output [NUM_INPUTS-1:0] to_core,
+    output [NUM_OUTPUTS-1:0] outputs,
+    input [NUM_OUTPUTS-1:0] from_core
 );
 
     // Instructions
@@ -11,16 +26,8 @@ module jtag_tap (
     localparam IDCODE           = 4'b1001;
     localparam INTEST           = 4'b0100;
 
-    // Device ID has 32 bits and consists of {version, part, manufacturerID, 1}
-    // 11-bit manufacturerID: EIA/JEP106, [10:7] #continuation characters mod16, [6:0] last byte without parity bit
-    // older list: https://www.mikrocontroller.net/attachment/39268/jep106k.pdf
-    // latest list: https://github.com/openocd-org/openocd/blob/master/src/helper/jep106.inc
-    // manufacturerID 00001111111 is illegal. Shift this in to determine end of ID stream.
-    // Constant 1 used to determine the presence of an ID. Bypass register contains 0 after reset.
-    localparam DEVICE_ID = {4'hF, 16'hED, 11'b00001001001, 1'b1};  // Xilinx
-
     reg [3:0] IR_shiftreg, IR_outreg;
-    reg [53:0] BS_shiftreg, BS_outreg;
+    reg [NUM_INPUTS+NUM_OUTPUTS-1:0] BS_shiftreg, BS_outreg;
     reg [31:0] ID_shiftreg;
     reg bypassreg, tdo_pre;
 
@@ -44,10 +51,10 @@ module jtag_tap (
     always @(posedge ClockIR) IR_shiftreg <= ShiftIR ? {TDI, IR_shiftreg[3:1]} : NOP;
     always @(posedge UpdateIR, negedge Resetn) IR_outreg <= Resetn ? IR_shiftreg : IDCODE; // BYPASS, if no IDCODE
 
-    always @(posedge ClockDR) BS_shiftreg <= ShiftDR ? {TDI, BS_shiftreg[53:1]} : 0; // {all_inputs, core_outputs};
+    always @(posedge ClockDR) BS_shiftreg <= ShiftDR ? {TDI, BS_shiftreg[NUM_INPUTS+NUM_OUTPUTS-1:1]} : {inputs, from_core};
     always @(posedge UpdateDR) BS_outreg <= BS_shiftreg;
-    // assign core_inputs = (IR_outreg == INTEST) ? BS_outreg[53:24] : all_inputs;
-    // assign all_outputs = ((IR_outreg == INTEST) || (IR_outreg == EXTEST)) ? BS_outreg[23:0] : core_outputs;
+    assign to_core = (IR_outreg == INTEST) ? BS_outreg[NUM_INPUTS+NUM_OUTPUTS-1:NUM_OUTPUTS] : inputs;
+    assign outputs = ((IR_outreg == INTEST) || (IR_outreg == EXTEST)) ? BS_outreg[NUM_OUTPUTS-1:0] : from_core;
 
     always @(posedge ClockDR) ID_shiftreg <= ShiftDR ? {TDI, ID_shiftreg[31:1]} : DEVICE_ID;
     always @(posedge ClockDR) bypassreg <= ShiftDR ? TDI : 0;  // shall load 0 in CAPTURE_DR state

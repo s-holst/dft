@@ -1,12 +1,22 @@
 `timescale 1ns / 1ps
 `include "assert.v"
 
-module jtag_tap_tb;
+module mac_wrapped_tb;
+
+    reg resetn;
+    reg [7:0] a, b;
+    reg [23:0] c;
+    wire [23:0] z;
 
     reg TCK, TMS, TRSTn, TDI;
     wire TDO;
 
-    jtag_tap dut(
+    mac_wrapped dut(
+        .resetn(resetn),
+        .a(a),
+        .b(b),
+        .c(c),
+        .z(z),
         .TCK       (TCK),
         .TMS       (TMS),
         .TRSTn     (TRSTn),
@@ -21,29 +31,25 @@ module jtag_tap_tb;
     integer i;
 
     initial begin
-        $dumpfile("jtag_tap_tb.vcd");
+        $dumpfile("mac_wrapped.vcd");
         $dumpvars;
-        $display("starting JTAG TAP testbench");
+        $display("starting MAC Wrapper testbench");
         TDI = 0;
         TCK = 0;
         TRSTn = 1;
 
-        // Reset
+        // Reset TAP, check device ID
         TMS = 1;
         #50;  // ------- negedge TCK
         TMS = 0;
         #10;  // ------- negedge TCK
-        `assert("state", dut.controller.state, dut.controller.RUN_TEST_IDLE, "RUN_TEST_IDLE")
         TMS = 1;
         #10;  // ------- negedge TCK
-        `assert("state", dut.controller.state, dut.controller.SELECT_DR_SCAN, "SELECT_DR_SCAN")
         TMS = 0;
         #10;  // ------- negedge TCK
-        `assert("state", dut.controller.state, dut.controller.CAPTURE_DR, "CAPTURE_DR")
         TMS = 0;
         #10;  // ------- negedge TCK
-        `assert("state", dut.controller.state, dut.controller.SHIFT_DR, "SHIFT_DR")
-        data_in = 32'h0000007F;  // dummy device ID (illegal manufacturer ID)
+        data_in = 32'h0000007F;
         for (i = 0; i < 32; i=i+1) begin
             TDI = data_in[i];
             #5;  // ------- posedge TCK
@@ -61,6 +67,17 @@ module jtag_tap_tb;
         `assert("data_out", data_out, 32'h0000007F, "dummy device ID")
         TMS = 1;
         #100;  // ------- negedge TCK
+
+        // test normal function of core
+        resetn = 1;
+        a = 10;
+        b = 7;
+        c = 1;
+        #10;
+        `assert("z", z, a*b+c, "functional op of core")
+        #10;
+
+        // TODO: observe through boundary scan
 
         $display("PASS ^o^");
         $finish;
