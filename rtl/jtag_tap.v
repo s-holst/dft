@@ -66,9 +66,11 @@ module jtag_tap #(
             tdo_pre <= IR_shiftreg[0];
         else
             case (IR_outreg)
-                BYPASS: tdo_pre <= bypassreg;
+                SAMPLE_PRELOAD: tdo_pre <= BS_shiftreg[0];
+                INTEST: tdo_pre <= BS_shiftreg[0];
+                EXTEST: tdo_pre <= BS_shiftreg[0];
                 IDCODE: tdo_pre <= ID_shiftreg[0];
-                default: tdo_pre <= BS_shiftreg[0];
+                default: tdo_pre <= bypassreg;
             endcase
     end
     assign TDO = Enable ? tdo_pre : 1'bz;  // Tristate buffer
