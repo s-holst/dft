@@ -38,11 +38,13 @@ module jtag_tap_controller_tb;
         #10;  // ------- negedge TCK
         `assert("state", dut.state, dut.RUN_TEST_IDLE, "RUN_TEST_IDLE 1.2")
         TRSTn = 0;
-        #1;
+        //#1;  // removed async reset for synthesizability
+        @(negedge TCK)
+        @(negedge TCK)
         `assert("state", dut.state, dut.TEST_LOGIC_RESET, "TEST_LOGIC_RESET 1.3")
         TRSTn = 1;
         TMS = 1;
-        #9;   // ------- negedge TCK
+        @(negedge TCK)
 
         // (2.X) test upper loop
         #10;  // ------- negedge TCK

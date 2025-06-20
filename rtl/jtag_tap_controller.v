@@ -35,8 +35,8 @@ module jtag_tap_controller (
     reg [3:0] state;
 
     // next state logic
-    // state transition only on rising TCK or falling TRSTn
-    always @(posedge TCK, negedge TRSTn)
+    // state transition only on rising TCK (or falling TRSTn, omitted for synthesizability)
+    always @(posedge TCK)
         if (~TRSTn) state = TEST_LOGIC_RESET;
         else case (state)
             TEST_LOGIC_RESET: state = (TMS) ? TEST_LOGIC_RESET : RUN_TEST_IDLE;
@@ -61,12 +61,12 @@ module jtag_tap_controller (
     // Combinational outputs
     assign ClockIR = TCK | ~((state == CAPTURE_IR) | (state == SHIFT_IR));
     assign ClockDR = TCK | ~((state == CAPTURE_DR) | (state == SHIFT_DR));
-    assign UpdateIR = ~TCK & (state == UPDATE_IR);
+    assign UpdateIR = ~TCK & ((state == UPDATE_IR) | (state == TEST_LOGIC_RESET));  // UpdateIR at reset to load IDCODE
     assign UpdateDR = ~TCK & (state == UPDATE_DR);
     assign Select = (state & 8) ? 1 : 0;
 
     // Outputs synchonized on falling edge of TCK
-    always @(negedge TCK, negedge TRSTn) begin
+    always @(negedge TCK) begin
         if (~TRSTn) begin
             ShiftIR <= 0;
             ShiftDR <= 0;

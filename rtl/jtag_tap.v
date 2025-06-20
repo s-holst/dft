@@ -18,13 +18,11 @@ module jtag_tap #(
     input [NUM_OUTPUTS-1:0] from_core
 );
 
-    // Instructions
-    localparam BYPASS           = 4'b1111;  // Shall be all 1's
+    // Instructions (all 1's reserved for BYPASS, 8.1.1.e: avoid all 0's for disrupting ops)
     localparam SAMPLE_PRELOAD   = 4'b0101;
-    localparam EXTEST           = 4'b0110;
-    localparam NOP              = 4'b0001;  // Shall end in ...01.
     localparam IDCODE           = 4'b1001;
     localparam INTEST           = 4'b0100;
+    localparam EXTEST           = 4'b0110;
 
     reg [3:0] IR_shiftreg, IR_outreg;
     reg [NUM_INPUTS+NUM_OUTPUTS-1:0] BS_shiftreg, BS_outreg;
@@ -48,8 +46,8 @@ module jtag_tap #(
         .Enable    (Enable)
     );
 
-    always @(posedge ClockIR) IR_shiftreg <= ShiftIR ? {TDI, IR_shiftreg[3:1]} : NOP;
-    always @(posedge UpdateIR, negedge Resetn) IR_outreg <= Resetn ? IR_shiftreg : IDCODE; // BYPASS, if no IDCODE
+    always @(posedge ClockIR) IR_shiftreg <= ShiftIR ? {TDI, IR_shiftreg[3:1]} : 1;  // 7.1.1.d: load '01' into LSB in CAPTURE_IR
+    always @(posedge UpdateIR) IR_outreg <= Resetn ? IR_shiftreg : IDCODE; // set to ~0 (BYPASS), if no IDCODE
 
     always @(posedge ClockDR) BS_shiftreg <= ShiftDR ? {TDI, BS_shiftreg[NUM_INPUTS+NUM_OUTPUTS-1:1]} : {inputs, from_core};
     always @(posedge UpdateDR) BS_outreg <= BS_shiftreg;
@@ -70,7 +68,7 @@ module jtag_tap #(
                 INTEST: tdo_pre <= BS_shiftreg[0];
                 EXTEST: tdo_pre <= BS_shiftreg[0];
                 IDCODE: tdo_pre <= ID_shiftreg[0];
-                default: tdo_pre <= bypassreg;
+                default: tdo_pre <= bypassreg;  // 8.1.1.d: unknown instructions are equivalent to bypass
             endcase
     end
     assign TDO = Enable ? tdo_pre : 1'bz;  // Tristate buffer
